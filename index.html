@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>CricBuzz Live Scores and Commentary</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    h1, h2 { color: #2c3e50; }
+    .section { margin-bottom: 30px; }
+    pre { background: #f4f4f4; padding: 10px; border: 1px solid #ccc; }
+    button { padding: 10px; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h1>CricBuzz Live Scores and Commentary</h1>
+
+  <!-- Section to display live scores -->
+  <div class="section">
+    <h2>Live Scores</h2>
+    <button onclick="fetchLiveScores()">Fetch Live Scores</button>
+    <ul id="live-scores"></ul>
+  </div>
+
+  <!-- Section for commentary -->
+  <div class="section">
+    <h2>Commentary</h2>
+    <button onclick="fetchAndSaveCommentary()">Fetch & Save Commentary</button>
+    <button onclick="loadSavedCommentary()">Load Saved Commentary</button>
+    <pre id="commentary"></pre>
+  </div>
+
+  <script>
+    // Fetches live scores from the backend and displays them in a list
+    async function fetchLiveScores() {
+      try {
+        const res = await fetch('http://localhost:3000/live-scores');
+        const data = await res.json();
+        const ul = document.getElementById('live-scores');
+        ul.innerHTML = '';
+        data.liveScores.forEach(score => {
+          const li = document.createElement('li');
+          li.textContent = score;
+          ul.appendChild(li);
+        });
+      } catch (err) {
+        console.error('Error fetching live scores:', err);
+      }
+    }
+
+    // Calls the backend to fetch commentary from the API and save it locally
+    async function fetchAndSaveCommentary() {
+      try {
+        const res = await fetch('http://localhost:3000/fetch-commentary');
+        const data = await res.json();
+        alert(data.message);
+      } catch (err) {
+        console.error('Error fetching commentary:', err);
+      }
+    }
+
+    // Loads saved commentary from the backend and displays it
+    async function loadSavedCommentary() {
+      try {
+        const res = await fetch('http://localhost:3000/saved-commentary');
+        const data = await res.json();
+        document.getElementById('commentary').textContent = JSON.stringify(data.commentary, null, 2);
+      } catch (err) {
+        console.error('Error loading saved commentary:', err);
+      }
+    }
+  </script>
+</body>
+</html>
