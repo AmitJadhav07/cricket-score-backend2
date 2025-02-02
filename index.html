@@ -50,7 +50,8 @@
     // Calls the backend to fetch commentary from the API and save it locally
     async function fetchAndSaveCommentary() {
       try {
-        const res = await fetch('http://localhost:3000/fetch-commentary');
+        const res = await fetch('https://cricket-score-backend2-api.onrender.com');
+        //const res = await fetch('http://localhost:3000/fetch-commentary');
         const data = await res.json();
         alert(data.message);
       } catch (err) {
