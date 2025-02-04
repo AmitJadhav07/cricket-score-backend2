@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3000;
 
 // Allow cross-origin requests and send cookies (for sessions)
 app.use(cors({
-  origin: true,
+  origin: "https://cricket-score-backend2-api.onrender.com",
   credentials: true
 }));
 
