@@ -1,46 +1,87 @@
-// Import required libraries
+// server.js
+
 const express = require('express');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const fs = require('fs');
 const cors = require('cors');
+const session = require('express-session');
 
-// Initialize the Express app and set the port
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
-// Enable CORS and JSON parsing middleware
-app.use(cors());
+// Allow cross-origin requests and send cookies (for sessions)
+app.use(cors({
+  origin: true,
+  credentials: true
+}));
+
+// Middleware to parse JSON bodies and URL-encoded data
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Helper function: Saves commentary data to a local file
-const saveCommentary = (commentary) => {
-  fs.writeFileSync('commentary.json', JSON.stringify(commentary, null, 2));
+// Configure session middleware (in production, use a secure secret and HTTPS)
+app.use(session({
+  secret: 'mysecret', // Change this to a strong secret in production
+  resave: false,
+  saveUninitialized: true,
+  cookie: { secure: false } // Set secure: true if using HTTPS
+}));
+
+// Dummy user (in production, use a database and hashed passwords)
+const dummyUser = {
+  username: "admin",
+  password: "password"
 };
 
-// -----------------------------------------------------
-// Endpoint 1: Fetch Live Scores from CricBuzz
-// -----------------------------------------------------
+// Authentication middleware to protect endpoints
+function isAuthenticated(req, res, next) {
+  if (req.session && req.session.user) {
+    next();
+  } else {
+    res.status(401).json({ error: "Unauthorized" });
+  }
+}
+
+// --- AUTHENTICATION ROUTES ---
+
+// Login route: POST /login
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+  if (username === dummyUser.username && password === dummyUser.password) {
+    req.session.user = { username };
+    res.json({ message: "Login successful" });
+  } else {
+    res.status(401).json({ error: "Invalid credentials" });
+  }
+});
+
+// Logout route: POST /logout
+app.post('/logout', (req, res) => {
+  req.session.destroy(err => {
+    if (err) {
+      res.status(500).json({ error: "Logout failed" });
+    } else {
+      res.json({ message: "Logout successful" });
+    }
+  });
+});
+
+// --- PUBLIC ENDPOINTS ---
+
+// Endpoint to fetch live scores (public)
 app.get('/live-scores', async (req, res) => {
   try {
-    // Request the live scores page
     const { data } = await axios.get('https://www.cricbuzz.com/cricket-match/live-scores');
-    
-    // Load the HTML into Cheerio
     const $ = cheerio.load(data);
-    
-    // Using a CSS selector equivalent to the provided XPath:
+    // Convert the given XPath to a CSS selector:
     // XPath: //div[@class='cb-scr-wll-chvrn cb-lv-scrs-col ']
-    // CSS Selector: div.cb-scr-wll-chvrn.cb-lv-scrs-col
+    // CSS selector:
     const liveScoresElements = $('div.cb-scr-wll-chvrn.cb-lv-scrs-col');
-    
-    // Gather text from each matching element
     let liveScores = [];
     liveScoresElements.each((i, element) => {
       liveScores.push($(element).text().trim());
     });
-    
-    // Return the live scores as JSON
     res.json({ liveScores });
   } catch (error) {
     console.error('Error fetching live scores:', error.message);
@@ -48,18 +89,15 @@ app.get('/live-scores', async (req, res) => {
   }
 });
 
-// -----------------------------------------------------
-// Endpoint 2: Fetch and Save Full Commentary from API
-// -----------------------------------------------------
-app.get('/fetch-commentary', async (req, res) => {
+// --- PROTECTED ENDPOINTS (Require Authentication) ---
+
+// Endpoint to fetch and save commentary from the given JSON API
+app.get('/fetch-commentary', isAuthenticated, async (req, res) => {
   try {
-    // Request the JSON commentary data from CricBuzz
     const response = await axios.get('https://www.cricbuzz.com/api/cricket-match/109733/full-commentary/1');
     const commentaryData = response.data;
-    
-    // Save the commentary data locally for future access
-    saveCommentary(commentaryData);
-    
+    // Save commentary to a local file (for future access)
+    fs.writeFileSync('commentary.json', JSON.stringify(commentaryData, null, 2));
     res.json({ message: 'Commentary fetched and saved successfully.', commentary: commentaryData });
   } catch (error) {
     console.error('Error fetching commentary:', error.message);
@@ -67,10 +105,8 @@ app.get('/fetch-commentary', async (req, res) => {
   }
 });
 
-// -----------------------------------------------------
-// Endpoint 3: Retrieve Saved Commentary
-// -----------------------------------------------------
-app.get('/saved-commentary', (req, res) => {
+// Endpoint to retrieve saved commentary
+app.get('/saved-commentary', isAuthenticated, (req, res) => {
   try {
     if (fs.existsSync('commentary.json')) {
       const commentaryData = JSON.parse(fs.readFileSync('commentary.json', 'utf-8'));
@@ -84,7 +120,7 @@ app.get('/saved-commentary', (req, res) => {
   }
 });
 
-// Start the server and listen on PORT 3000
+// Start the server
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
