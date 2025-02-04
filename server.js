@@ -1,9 +1,8 @@
-// server.js
-
 const express = require('express');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const fs = require('fs');
+const path = require('path'); // Import path module
 const cors = require('cors');
 const session = require('express-session');
 
@@ -12,7 +11,7 @@ const PORT = process.env.PORT || 3000;
 
 // Allow cross-origin requests and send cookies (for sessions)
 app.use(cors({
-  origin: "https://cricket-score-backend2-api.onrender.com",
+  origin: "https://cricket-score-backend2-api.onrender.com", // Change this to your frontend URL if different
   credentials: true
 }));
 
@@ -20,12 +19,15 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Serve static files from the "public" folder
+app.use(express.static(path.join(__dirname, 'public')));
+
 // Configure session middleware (in production, use a secure secret and HTTPS)
 app.use(session({
   secret: 'mysecret', // Change this to a strong secret in production
   resave: false,
   saveUninitialized: true,
-  cookie: { secure: false, sameSite: 'lax' } // Set secure: true if using HTTPS
+  cookie: { secure: true, sameSite: 'none' } // Ensure SameSite=None for cross-origin cookies
 }));
 
 // Dummy user (in production, use a database and hashed passwords)
@@ -44,7 +46,6 @@ function isAuthenticated(req, res, next) {
 }
 
 // --- AUTHENTICATION ROUTES ---
-
 // Login route: POST /login
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
@@ -68,15 +69,11 @@ app.post('/logout', (req, res) => {
 });
 
 // --- PUBLIC ENDPOINTS ---
-
 // Endpoint to fetch live scores (public)
 app.get('/live-scores', async (req, res) => {
   try {
     const { data } = await axios.get('https://www.cricbuzz.com/cricket-match/live-scores');
     const $ = cheerio.load(data);
-    // Convert the given XPath to a CSS selector:
-    // XPath: //div[@class='cb-scr-wll-chvrn cb-lv-scrs-col ']
-    // CSS selector:
     const liveScoresElements = $('div.cb-scr-wll-chvrn.cb-lv-scrs-col');
     let liveScores = [];
     liveScoresElements.each((i, element) => {
@@ -90,13 +87,11 @@ app.get('/live-scores', async (req, res) => {
 });
 
 // --- PROTECTED ENDPOINTS (Require Authentication) ---
-
 // Endpoint to fetch and save commentary from the given JSON API
 app.get('/fetch-commentary', isAuthenticated, async (req, res) => {
   try {
     const response = await axios.get('https://www.cricbuzz.com/api/cricket-match/109733/full-commentary/1');
     const commentaryData = response.data;
-    // Save commentary to a local file (for future access)
     fs.writeFileSync('commentary.json', JSON.stringify(commentaryData, null, 2));
     res.json({ message: 'Commentary fetched and saved successfully.', commentary: commentaryData });
   } catch (error) {
@@ -118,6 +113,11 @@ app.get('/saved-commentary', isAuthenticated, (req, res) => {
     console.error('Error retrieving saved commentary:', error.message);
     res.status(500).json({ error: 'Failed to retrieve saved commentary.' });
   }
+});
+
+// Serve index.html for the root URL
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // Start the server
