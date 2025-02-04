@@ -2,51 +2,51 @@ const express = require('express');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const fs = require('fs');
-const path = require('path'); // Import path module
 const cors = require('cors');
 const session = require('express-session');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Allow cross-origin requests and send cookies (for sessions)
+// ✅ Serve static files from "public" directory (for frontend)
+app.use(express.static(path.join(__dirname, 'public')));
+
+// ✅ Allow cross-origin requests with credentials (for authentication)
 app.use(cors({
-  origin: "https://cricket-score-backend2-api.onrender.com", // Change this to your frontend URL if different
+  origin: "https://cricket-score-backend2-api.onrender.com",
   credentials: true
 }));
 
-// Middleware to parse JSON bodies and URL-encoded data
+// ✅ Middleware to parse JSON and URL-encoded data
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve static files from the "public" folder
-app.use(express.static(path.join(__dirname, 'public')));
-
-// Configure session middleware (in production, use a secure secret and HTTPS)
+// ✅ Configure session middleware (secure in production)
 app.use(session({
-  secret: 'mysecret', // Change this to a strong secret in production
+  secret: 'mysecret', // 🔹 Change this to a strong secret in production
   resave: false,
-  saveUninitialized: true,
-  cookie: { secure: true, sameSite: 'none' } // Ensure SameSite=None for cross-origin cookies
+  saveUninitialized: false,
+  cookie: { secure: false, httpOnly: true, sameSite: 'lax' } // secure: false for HTTP (true for HTTPS)
 }));
 
-// Dummy user (in production, use a database and hashed passwords)
+// Dummy user (use a database in production)
 const dummyUser = {
   username: "admin",
   password: "password"
 };
 
-// Authentication middleware to protect endpoints
+// ✅ Authentication Middleware (Protects Routes)
 function isAuthenticated(req, res, next) {
   if (req.session && req.session.user) {
-    next();
-  } else {
-    res.status(401).json({ error: "Unauthorized" });
+    return next();
   }
+  res.status(401).json({ error: "Unauthorized" });
 }
 
-// --- AUTHENTICATION ROUTES ---
-// Login route: POST /login
+// ✅ AUTH ROUTES
+
+// 🔹 Login Route (POST /login)
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
   if (username === dummyUser.username && password === dummyUser.password) {
@@ -57,28 +57,40 @@ app.post('/login', (req, res) => {
   }
 });
 
-// Logout route: POST /logout
+// 🔹 Logout Route (POST /logout)
 app.post('/logout', (req, res) => {
   req.session.destroy(err => {
     if (err) {
-      res.status(500).json({ error: "Logout failed" });
-    } else {
-      res.json({ message: "Logout successful" });
+      return res.status(500).json({ error: "Logout failed" });
     }
+    res.json({ message: "Logout successful" });
   });
 });
 
-// --- PUBLIC ENDPOINTS ---
-// Endpoint to fetch live scores (public)
+// 🔹 Check Authentication Status (GET /check-auth)
+app.get('/check-auth', (req, res) => {
+  if (req.session && req.session.user) {
+    res.json({ isAuthenticated: true, username: req.session.user.username });
+  } else {
+    res.json({ isAuthenticated: false });
+  }
+});
+
+// ✅ PUBLIC ENDPOINTS
+
+// 🔹 Fetch Live Scores (GET /live-scores)
 app.get('/live-scores', async (req, res) => {
   try {
     const { data } = await axios.get('https://www.cricbuzz.com/cricket-match/live-scores');
     const $ = cheerio.load(data);
+
     const liveScoresElements = $('div.cb-scr-wll-chvrn.cb-lv-scrs-col');
     let liveScores = [];
+
     liveScoresElements.each((i, element) => {
       liveScores.push($(element).text().trim());
     });
+
     res.json({ liveScores });
   } catch (error) {
     console.error('Error fetching live scores:', error.message);
@@ -86,12 +98,14 @@ app.get('/live-scores', async (req, res) => {
   }
 });
 
-// --- PROTECTED ENDPOINTS (Require Authentication) ---
-// Endpoint to fetch and save commentary from the given JSON API
+// ✅ PROTECTED ENDPOINTS (Require Login)
+
+// 🔹 Fetch & Save Commentary (GET /fetch-commentary)
 app.get('/fetch-commentary', isAuthenticated, async (req, res) => {
   try {
     const response = await axios.get('https://www.cricbuzz.com/api/cricket-match/109733/full-commentary/1');
     const commentaryData = response.data;
+
     fs.writeFileSync('commentary.json', JSON.stringify(commentaryData, null, 2));
     res.json({ message: 'Commentary fetched and saved successfully.', commentary: commentaryData });
   } catch (error) {
@@ -100,7 +114,7 @@ app.get('/fetch-commentary', isAuthenticated, async (req, res) => {
   }
 });
 
-// Endpoint to retrieve saved commentary
+// 🔹 Load Saved Commentary (GET /saved-commentary)
 app.get('/saved-commentary', isAuthenticated, (req, res) => {
   try {
     if (fs.existsSync('commentary.json')) {
@@ -115,12 +129,12 @@ app.get('/saved-commentary', isAuthenticated, (req, res) => {
   }
 });
 
-// Serve index.html for the root URL
-app.get('/', (req, res) => {
+// ✅ Serve Frontend (For SPA Support)
+app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Start the server
+// ✅ Start Server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

@@ -1,6 +1,4 @@
-/* script.js */
-
-const backendURL = 'https://cricket-score-backend2-api.onrender.com'; // Update with your deployed backend URL if needed
+const backendURL = 'https://cricket-score-backend2-api.onrender.com'; // Update if needed
 
 // DOM elements
 const loginForm = document.getElementById('login-form');
@@ -15,18 +13,16 @@ const autoFetchToggle = document.getElementById('auto-fetch-toggle');
 const fetchCommentaryBtn = document.getElementById('fetch-commentary-btn');
 const loadCommentaryBtn = document.getElementById('load-commentary-btn');
 const commentaryPre = document.getElementById('commentary');
-
 const commentarySection = document.getElementById('commentary-section');
 
 let liveScoreInterval = null;
 
 /**
  * Updates the UI based on login status.
- * For this demo, we use localStorage to store a simple flag.
  */
-function updateAuthUI(isLoggedIn) {
+function updateAuthUI(isLoggedIn, username = '') {
   if (isLoggedIn) {
-    authMessage.textContent = 'Logged in as ' + usernameInput.value;
+    authMessage.textContent = `Logged in as ${username}`;
     loginForm.style.display = 'none';
     logoutBtn.style.display = 'block';
     commentarySection.style.display = 'block';
@@ -38,7 +34,23 @@ function updateAuthUI(isLoggedIn) {
   }
 }
 
-// Login form submission handler
+// Check session on page load
+async function checkSession() {
+  try {
+    const res = await fetch(`${backendURL}/check-auth`, { credentials: 'include' });
+    const data = await res.json();
+    if (res.ok && data.isAuthenticated) {
+      updateAuthUI(true, data.username);
+    } else {
+      updateAuthUI(false);
+    }
+  } catch (err) {
+    console.error('Error checking session:', err);
+    updateAuthUI(false);
+  }
+}
+
+// Login form submission
 loginForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const username = usernameInput.value;
@@ -48,20 +60,20 @@ loginForm.addEventListener('submit', async (e) => {
     const res = await fetch(`${backendURL}/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
+      credentials: 'include', // Ensure cookies are sent
       body: JSON.stringify({ username, password })
     });
     const data = await res.json();
+    
     if (res.ok) {
-      localStorage.setItem('isLoggedIn', 'true');
-      updateAuthUI(true);
-      authMessage.textContent = data.message;
+      updateAuthUI(true, username);
+      alert('Login successful');
     } else {
-      authMessage.textContent = data.error;
+      alert(`Login failed: ${data.error}`);
     }
   } catch (err) {
     console.error('Login error:', err);
-    authMessage.textContent = 'Login failed. Please try again.';
+    alert('Login failed. Please try again.');
   }
 });
 
@@ -73,24 +85,25 @@ logoutBtn.addEventListener('click', async () => {
       credentials: 'include'
     });
     const data = await res.json();
+
     if (res.ok) {
-      localStorage.removeItem('isLoggedIn');
       updateAuthUI(false);
-      authMessage.textContent = data.message;
+      alert('Logout successful');
     } else {
-      authMessage.textContent = data.error;
+      alert(`Logout failed: ${data.error}`);
     }
   } catch (err) {
     console.error('Logout error:', err);
-    authMessage.textContent = 'Logout failed. Please try again.';
+    alert('Logout failed. Please try again.');
   }
 });
 
-// Function to fetch live scores once and update the list
+// Fetch live scores and update the list
 async function fetchLiveScores() {
   try {
     const res = await fetch(`${backendURL}/live-scores`);
     const data = await res.json();
+
     liveScoresList.innerHTML = '';
     data.liveScores.forEach(score => {
       const li = document.createElement('li');
@@ -102,49 +115,52 @@ async function fetchLiveScores() {
   }
 }
 
-// Handle auto-fetch toggle change
+// Auto-fetch toggle for live scores
 autoFetchToggle.addEventListener('change', () => {
   if (autoFetchToggle.checked) {
-    // Start interval to fetch live scores every second
     liveScoreInterval = setInterval(fetchLiveScores, 1000);
   } else {
-    // Clear the interval so that live scores are no longer auto-fetched
-    if (liveScoreInterval) {
-      clearInterval(liveScoreInterval);
-      liveScoreInterval = null;
-    }
+    clearInterval(liveScoreInterval);
+    liveScoreInterval = null;
   }
 });
 
-// Initially, fetch live scores once on page load
-fetchLiveScores();
-
-// Handler for "Fetch & Save Commentary" button (protected route)
+// Fetch & Save Commentary (Authenticated)
 fetchCommentaryBtn.addEventListener('click', async () => {
   try {
     const res = await fetch(`${backendURL}/fetch-commentary`, { credentials: 'include' });
     const data = await res.json();
-    alert(data.message);
+
+    if (res.ok) {
+      alert('Commentary fetched and saved successfully.');
+    } else {
+      alert(`Error: ${data.error}`);
+    }
   } catch (err) {
     console.error('Error fetching commentary:', err);
     alert('Error fetching commentary.');
   }
 });
 
-// Handler for "Load Saved Commentary" button (protected route)
+// Load Saved Commentary (Authenticated)
 loadCommentaryBtn.addEventListener('click', async () => {
   try {
     const res = await fetch(`${backendURL}/saved-commentary`, { credentials: 'include' });
     const data = await res.json();
-    commentaryPre.textContent = JSON.stringify(data.commentary, null, 2);
+
+    if (res.ok && data.commentary) {
+      commentaryPre.textContent = JSON.stringify(data.commentary, null, 2);
+    } else {
+      commentaryPre.textContent = 'No commentary available.';
+    }
   } catch (err) {
     console.error('Error loading commentary:', err);
     commentaryPre.textContent = 'Error loading commentary.';
   }
 });
 
-// On page load, update the authentication UI based on localStorage flag
+// Run on page load
 document.addEventListener('DOMContentLoaded', () => {
-  const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
-  updateAuthUI(isLoggedIn);
+  checkSession(); // Check if user is logged in
+  fetchLiveScores(); // Fetch scores once on load
 });
