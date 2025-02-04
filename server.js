@@ -25,7 +25,7 @@ app.use(session({
   secret: 'mysecret', // Change this to a strong secret in production
   resave: false,
   saveUninitialized: true,
-  cookie: { secure: false } // Set secure: true if using HTTPS
+  cookie: { secure: false, sameSite: 'lax' } // Set secure: true if using HTTPS
 }));
 
 // Dummy user (in production, use a database and hashed passwords)
